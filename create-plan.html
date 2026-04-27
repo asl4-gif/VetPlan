@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VetPlan – Create Treatment Plan</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .step-panel { display: none; }
+    .step-panel.active { display: block; animation: fadeUp 0.3s ease both; }
+
+    .ai-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.45rem 0.9rem;
+      background: var(--moss);
+      color: #fff;
+      border: none;
+      border-radius: var(--radius-xs);
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: var(--transition);
+      margin-top: 0.5rem;
+    }
+    .ai-btn:hover { background: var(--moss-mid); }
+    .ai-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .ai-btn .ai-badge { background: rgba(255,255,255,0.2); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.68rem; }
+
+    .priority-select {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .priority-option {
+      flex: 1;
+      border: 2px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.75rem;
+      cursor: pointer;
+      text-align: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+      transition: var(--transition);
+      background: var(--warm-white);
+    }
+    .priority-option:hover { border-color: var(--slate-ghost); }
+    .priority-option.active-high { border-color: var(--danger); background: var(--danger-pale); color: var(--danger); }
+    .priority-option.active-medium { border-color: #F59E0B; background: #FEF3C7; color: #92400E; }
+    .priority-option.active-low { border-color: var(--success); background: var(--success-pale); color: var(--success); }
+
+    .step-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-light);
+    }
+
+    .progress-bar-wrap {
+      background: var(--border-light);
+      border-radius: 4px;
+      height: 4px;
+      margin-bottom: 2rem;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--moss);
+      border-radius: 4px;
+      transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .step-indicator {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 1.75rem;
+    }
+    .step-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: var(--transition);
+    }
+    .step-dot.active { background: var(--moss); width: 24px; border-radius: 4px; }
+    .step-dot.done { background: var(--success); }
+
+    .ai-loading { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--moss); }
+  </style>
+</head>
+<body>
+
+<div id="toastContainer"></div>
+
+<nav>
+  <a href="vet-dashboard.html" class="nav-logo"><span>🩺</span> VetPlan</a>
+  <div class="nav-user">
+    <span class="nav-badge" id="navName"></span>
+    <button class="btn-logout" onclick="VetPlan.logout()">Sign out</button>
+  </div>
+</nav>
+
+<div class="page-sm fade-up">
+
+  <a href="vet-dashboard.html" class="back-link">← Back to Dashboard</a>
+
+  <div class="page-header" style="margin-bottom:1.5rem;">
+    <div>
+      <h1 class="page-title">Create Treatment <span>Plan</span></h1>
+      <p class="page-subtitle">Fill in all required fields. The owner will be notified for approval.</p>
+    </div>
+  </div>
+
+  <!-- Success screen -->
+  <div id="successScreen" style="display:none;">
+    <div class="card success-wrap fade-up">
+      <span class="success-icon" style="animation:pulse 1s ease 0.2s both;">✅</span>
+      <h2 class="success-title">Treatment Plan Created!</h2>
+      <p class="success-msg">The treatment plan has been sent to <strong id="successOwnerName"></strong> for review and approval.</p>
+      <div class="actions-row" style="justify-content:center; flex-wrap:wrap;">
+        <a href="vet-dashboard.html" class="btn btn-primary" style="width:auto;">Back to Dashboard</a>
+        <button class="btn btn-secondary" onclick="resetForm()">+ Create Another</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Form -->
+  <div id="planForm">
+
+    <!-- Progress bar -->
+    <div class="progress-bar-wrap">
+      <div class="progress-bar-fill" id="progressBar" style="width:33%"></div>
+    </div>
+    <div class="step-indicator">
+      <div class="step-dot active" id="dot0"></div>
+      <div class="step-dot" id="dot1"></div>
+      <div class="step-dot" id="dot2"></div>
+    </div>
+
+    <!-- STEP 1: Patient Info -->
+    <div class="step-panel active" id="step0">
+      <div class="form-section">
+        <h3 class="section-title">🐾 Patient Information</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="petName">Pet Name <span class="required">*</span></label>
+            <input type="text" id="petName" placeholder="e.g. Luna" required oninput="updateAiHint()" />
+          </div>
+          <div class="form-group">
+            <label for="petSpecies">Species <span class="required">*</span></label>
+            <select id="petSpecies" onchange="updateAiHint()">
+              <option value="">Select species</option>
+              <option value="Dog">🐕 Dog</option>
+              <option value="Cat">🐈 Cat</option>
+              <option value="Bird">🦜 Bird</option>
+              <option value="Rabbit">🐇 Rabbit</option>
+              <option value="Fish">🐠 Fish</option>
+              <option value="Other">🐾 Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="petBreed">Breed / Type</label>
+            <input type="text" id="petBreed" placeholder="e.g. Golden Retriever" />
+          </div>
+          <div class="form-group">
+            <label for="ownerName">Owner Name <span class="required">*</span></label>
+            <input type="text" id="ownerName" placeholder="e.g. Jordan Lee" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Case Priority <span class="required">*</span></label>
+          <div class="priority-select">
+            <div class="priority-option" id="pri-high" onclick="setPriority('high')">🔴 High<br><span style="font-size:0.7rem;font-weight:400;color:inherit;opacity:0.75;">Urgent / time-sensitive</span></div>
+            <div class="priority-option active-medium" id="pri-medium" onclick="setPriority('medium')">🟡 Medium<br><span style="font-size:0.7rem;font-weight:400;color:inherit;opacity:0.75;">Important, not urgent</span></div>
+            <div class="priority-option" id="pri-low" onclick="setPriority('low')">🟢 Low<br><span style="font-size:0.7rem;font-weight:400;color:inherit;opacity:0.75;">Routine / preventive</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="step-nav">
+        <span></span>
+        <button class="btn btn-primary" onclick="goToStep(1)">Next: Diagnosis & Treatment →</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: Diagnosis & Treatment -->
+    <div class="step-panel" id="step1">
+      <div class="form-section">
+        <h3 class="section-title">🔬 Diagnosis &amp; Treatment</h3>
+
+        <div class="form-group">
+          <label for="diagnosis">Diagnosis <span class="required">*</span></label>
+          <input type="text" id="diagnosis" placeholder="e.g. Feline Upper Respiratory Infection" oninput="updateCharCount('diagnosis', 'diag-count', 300)" />
+          <div class="char-counter" id="diag-count"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="treatment">Proposed Treatment <span class="required">*</span></label>
+          <textarea id="treatment" placeholder="Describe the treatment plan in detail, including medications, dosages, and schedule…" oninput="updateCharCount('treatment', 'treat-count', 1000)"></textarea>
+          <div class="char-counter" id="treat-count"></div>
+          <button class="ai-btn" onclick="suggestTreatment()" id="aiTreatBtn">
+            <span class="ai-badge">AI</span> Suggest Treatment Plan
+          </button>
+        </div>
+      </div>
+
+      <!-- AI suggestion panel -->
+      <div class="ai-panel" id="aiPanel" style="display:none;">
+        <div class="ai-panel-header">
+          <span class="ai-badge">AI</span>
+          AI-Generated Suggestion
+        </div>
+        <div class="ai-suggestion-text" id="aiSuggestionText"></div>
+        <div style="display:flex; gap:0.75rem; margin-top:1rem; flex-wrap:wrap;">
+          <button class="btn btn-primary btn-sm" onclick="applyAiSuggestion()">Apply Suggestion</button>
+          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('aiPanel').style.display='none'">Dismiss</button>
+        </div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn btn-secondary" onclick="goToStep(0)">← Back</button>
+        <button class="btn btn-primary" onclick="goToStep(2)">Next: Costs &amp; Risks →</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: Risks, Benefits & Cost -->
+    <div class="step-panel" id="step2">
+      <div class="form-section">
+        <h3 class="section-title">⚖️ Risks, Benefits &amp; Cost</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="risks">Risks / Side Effects <span class="required">*</span></label>
+            <textarea id="risks" placeholder="Describe potential risks or side effects…" style="min-height:90px;"></textarea>
+          </div>
+          <div class="form-group">
+            <label for="benefits">Expected Benefits <span class="required">*</span></label>
+            <textarea id="benefits" placeholder="Describe the expected outcomes and success likelihood…" style="min-height:90px;"></textarea>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="cost">Estimated Cost (USD) <span class="required">*</span></label>
+            <input type="number" id="cost" placeholder="0.00" min="0" step="0.01" />
+          </div>
+          <div class="form-group">
+            <label for="notes">Internal Notes (optional)</label>
+            <input type="text" id="notes" placeholder="Pre-op instructions, follow-up schedule…" />
+          </div>
+        </div>
+      </div>
+
+      <div id="formError" class="error-box"></div>
+
+      <div class="step-nav">
+        <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
+        <button class="btn btn-primary" onclick="submitPlan()" id="submitBtn">
+          Send to Owner for Approval →
+        </button>
+      </div>
+    </div>
+
+  </div><!-- /#planForm -->
+
+</div>
+
+<script src="app.js"></script>
+<script>
+  const user = VetPlan.requireLogin('vet');
+  if (user) {
+    document.getElementById('navName').textContent = user.name;
+  }
+
+  let currentStep = 0;
+  let selectedPriority = 'medium';
+  let aiSuggestionData = null;
+
+  function setPriority(p) {
+    selectedPriority = p;
+    ['high', 'medium', 'low'].forEach(lvl => {
+      const el = document.getElementById('pri-' + lvl);
+      el.className = 'priority-option' + (lvl === p ? ` active-${lvl}` : '');
+    });
+  }
+
+  function goToStep(step) {
+    if (step > currentStep && !validateStep(currentStep)) return;
+    document.getElementById('step' + currentStep).classList.remove('active');
+    currentStep = step;
+    document.getElementById('step' + currentStep).classList.add('active');
+    const pct = ((step + 1) / 3) * 100;
+    document.getElementById('progressBar').style.width = pct + '%';
+    for (let i = 0; i < 3; i++) {
+      const dot = document.getElementById('dot' + i);
+      dot.className = 'step-dot' + (i < step ? ' done' : i === step ? ' active' : '');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function validateStep(step) {
+    if (step === 0) {
+      if (!document.getElementById('petName').value.trim()) { VetPlan.toast('Please enter pet name', 'error'); return false; }
+      if (!document.getElementById('petSpecies').value) { VetPlan.toast('Please select species', 'error'); return false; }
+      if (!document.getElementById('ownerName').value.trim()) { VetPlan.toast('Please enter owner name', 'error'); return false; }
+    }
+    if (step === 1) {
+      if (!document.getElementById('diagnosis').value.trim()) { VetPlan.toast('Please enter a diagnosis', 'error'); return false; }
+      if (!document.getElementById('treatment').value.trim()) { VetPlan.toast('Please enter proposed treatment', 'error'); return false; }
+    }
+    return true;
+  }
+
+  function updateCharCount(fieldId, counterId, max) {
+    const val = document.getElementById(fieldId).value.length;
+    const el = document.getElementById(counterId);
+    el.textContent = `${val} / ${max}`;
+    el.className = 'char-counter' + (val > max * 0.9 ? ' warn' : '');
+  }
+
+  function updateAiHint() {
+    // Hint button visibility update
+  }
+
+  async function suggestTreatment() {
+    const diagnosis = document.getElementById('diagnosis').value.trim();
+    const petName = document.getElementById('petName').value.trim();
+    const species = document.getElementById('petSpecies').value;
+    const breed = document.getElementById('petBreed').value.trim();
+
+    if (!diagnosis) {
+      VetPlan.toast('Please enter a diagnosis first', 'warning');
+      return;
+    }
+
+    const btn = document.getElementById('aiTreatBtn');
+    btn.disabled = true;
+    btn.innerHTML = `<span style="display:inline-block;" class="spin">⏳</span> Generating suggestion…`;
+
+    const panel = document.getElementById('aiPanel');
+    panel.style.display = 'block';
+    document.getElementById('aiSuggestionText').innerHTML = '<div class="ai-loading"><span class="spin">⏳</span> Generating AI treatment suggestion…</div>';
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1000,
+          messages: [{
+            role: 'user',
+            content: `You are an expert veterinarian assistant. Given the following case, suggest a concise, practical treatment plan suitable for a clinical treatment document. Be specific, professional, and include medication types (not brand names), dosages guidance, timeline, and follow-up recommendations.
+
+Patient: ${petName || 'Unknown'} (${species || 'Unknown species'}${breed ? ', ' + breed : ''})
+Diagnosis: ${diagnosis}
+
+Provide ONLY the treatment plan text (2-4 sentences), no preamble. Focus on clarity for the pet owner to understand.`
+          }]
+        })
+      });
+
+      const data = await response.json();
+      const text = data.content?.find(c => c.type === 'text')?.text || 'Could not generate suggestion.';
+      aiSuggestionData = text;
+      document.getElementById('aiSuggestionText').textContent = text;
+    } catch (err) {
+      document.getElementById('aiSuggestionText').textContent = 'Unable to generate AI suggestion. Please fill in the treatment manually.';
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<span class="ai-badge">AI</span> Suggest Again';
+  }
+
+  function applyAiSuggestion() {
+    if (aiSuggestionData) {
+      document.getElementById('treatment').value = aiSuggestionData;
+      updateCharCount('treatment', 'treat-count', 1000);
+      document.getElementById('aiPanel').style.display = 'none';
+      VetPlan.toast('AI suggestion applied!', 'success');
+    }
+  }
+
+  function submitPlan() {
+    const fields = [
+      { id: 'risks', label: 'Risks' },
+      { id: 'benefits', label: 'Expected Benefits' },
+      { id: 'cost', label: 'Estimated Cost' },
+    ];
+    const err = document.getElementById('formError');
+    for (const f of fields) {
+      const el = document.getElementById(f.id);
+      if (!el.value.trim()) {
+        err.textContent = `Please fill in: ${f.label}`;
+        err.style.display = 'block';
+        el.focus();
+        return;
+      }
+    }
+    err.style.display = 'none';
+
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Sending…';
+
+    const plan = {
+      petName:    document.getElementById('petName').value.trim(),
+      petSpecies: document.getElementById('petSpecies').value,
+      petBreed:   document.getElementById('petBreed').value.trim() || 'Unknown',
+      ownerName:  document.getElementById('ownerName').value.trim(),
+      ownerId:    'owner',
+      vetName:    VetPlan.getUser().name,
+      diagnosis:  document.getElementById('diagnosis').value.trim(),
+      treatment:  document.getElementById('treatment').value.trim(),
+      cost:       parseFloat(document.getElementById('cost').value).toFixed(2),
+      risks:      document.getElementById('risks').value.trim(),
+      benefits:   document.getElementById('benefits').value.trim(),
+      notes:      document.getElementById('notes').value.trim(),
+      priority:   selectedPriority,
+    };
+
+    setTimeout(() => {
+      VetPlan.addPlan(plan);
+      document.getElementById('successOwnerName').textContent = plan.ownerName;
+      document.getElementById('planForm').style.display = 'none';
+      document.getElementById('successScreen').style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, 500);
+  }
+
+  function resetForm() {
+    currentStep = 0;
+    document.getElementById('planForm').style.display = 'block';
+    document.getElementById('successScreen').style.display = 'none';
+    document.querySelectorAll('.step-panel').forEach((p, i) => {
+      p.classList.toggle('active', i === 0);
+    });
+    document.getElementById('progressBar').style.width = '33%';
+    document.querySelectorAll('input, textarea, select').forEach(el => el.value = '');
+    setPriority('medium');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Send to Owner for Approval →';
+  }
+</script>
+</body>
+</html>

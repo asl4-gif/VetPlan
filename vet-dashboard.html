@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VetPlan – Vet Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .revision-alert {
+      background: linear-gradient(135deg, #FEF3C7, #FDE68A);
+      border: 1px solid #F59E0B;
+      border-radius: var(--radius-sm);
+      padding: 0.85rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+      font-size: 0.88rem;
+      color: #78350F;
+      font-weight: 500;
+      gap: 1rem;
+    }
+    .revision-alert a { color: #92400E; font-weight: 700; text-decoration: underline; }
+    .welcome-band {
+      background: linear-gradient(135deg, var(--moss), var(--moss-mid));
+      border-radius: var(--radius);
+      padding: 1.5rem 2rem;
+      margin-bottom: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(46,80,53,0.25);
+    }
+    .welcome-band h2 {
+      font-family: 'Fraunces', serif;
+      font-size: 1.5rem;
+      font-weight: 300;
+    }
+    .welcome-band h2 em { font-style: italic; opacity: 0.75; }
+    .welcome-band p { font-size: 0.85rem; opacity: 0.7; margin-top: 0.2rem; }
+    .welcome-band-right { font-size: 3rem; opacity: 0.4; }
+  </style>
+</head>
+<body>
+
+<div id="toastContainer"></div>
+
+<nav>
+  <a href="vet-dashboard.html" class="nav-logo"><span>🩺</span> VetPlan</a>
+  <div class="nav-user">
+    <span class="nav-badge" id="navName"></span>
+    <button class="btn-logout" onclick="VetPlan.logout()">Sign out</button>
+  </div>
+</nav>
+
+<div class="page fade-up">
+
+  <!-- Welcome Band -->
+  <div class="welcome-band">
+    <div>
+      <h2 id="greeting">Good morning, <em id="vetNameWelcome"></em></h2>
+      <p id="welcomeSub">Here's an overview of your active treatment plans.</p>
+    </div>
+    <div class="welcome-band-right">🩺</div>
+  </div>
+
+  <!-- Revision alert -->
+  <div id="revisionAlert" style="display:none;" class="revision-alert">
+    <span>⚠️ <strong id="revisionAlertMsg"></strong></span>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="statsRow"></div>
+
+  <!-- Quick Actions -->
+  <div class="quick-actions">
+    <a href="create-plan.html" class="quick-action-card">
+      <span class="qa-icon">📋</span>
+      <div>
+        <div class="qa-label">New Treatment Plan</div>
+        <div class="qa-hint">Create &amp; send to owner</div>
+      </div>
+    </a>
+    <div class="quick-action-card" onclick="filterByStatus('revision')">
+      <span class="qa-icon">✏️</span>
+      <div>
+        <div class="qa-label">View Revisions</div>
+        <div class="qa-hint">Plans needing updates</div>
+      </div>
+    </div>
+    <div class="quick-action-card" onclick="filterByStatus('pending')">
+      <span class="qa-icon">⏳</span>
+      <div>
+        <div class="qa-label">Awaiting Approval</div>
+        <div class="qa-hint">Pending owner sign-off</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter & Search Bar -->
+  <div class="filter-bar">
+    <div class="search-wrap">
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input type="text" id="searchInput" placeholder="Search by pet name, owner, or diagnosis…" oninput="renderPlans()" />
+    </div>
+    <div class="filter-tabs" id="filterTabs">
+      <button class="filter-tab active" data-status="all" onclick="setFilter('all', this)">All <span class="count" id="count-all">0</span></button>
+      <button class="filter-tab" data-status="pending" onclick="setFilter('pending', this)">Pending <span class="count" id="count-pending">0</span></button>
+      <button class="filter-tab" data-status="revision" onclick="setFilter('revision', this)">Revision <span class="count" id="count-revision">0</span></button>
+      <button class="filter-tab" data-status="approved" onclick="setFilter('approved', this)">Approved <span class="count" id="count-approved">0</span></button>
+    </div>
+    <select class="sort-select" id="sortSelect" onchange="renderPlans()">
+      <option value="newest">Newest first</option>
+      <option value="name">Pet name A–Z</option>
+      <option value="cost-high">Cost: High→Low</option>
+      <option value="cost-low">Cost: Low→High</option>
+    </select>
+  </div>
+
+  <!-- Patient list -->
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+    <h2 style="font-family:'Fraunces',serif; font-size:1.1rem; font-weight:400; color:var(--charcoal);">All Patients</h2>
+    <span id="resultCount" style="font-size:0.8rem; color:var(--slate-light);"></span>
+  </div>
+  <div class="patient-grid" id="patientGrid"></div>
+
+</div>
+
+<script src="app.js"></script>
+<script>
+  const user = VetPlan.requireLogin('vet');
+  let activeFilter = 'all';
+
+  if (user) {
+    document.getElementById('navName').textContent = user.name;
+    document.getElementById('vetNameWelcome').textContent = user.name;
+    document.getElementById('greeting').firstChild.textContent = VetPlan.greetingTime() + ', ';
+
+    const allPlans = VetPlan.getPlans();
+    const counts = allPlans.reduce((acc, p) => { acc[p.status] = (acc[p.status] || 0) + 1; return acc; }, {});
+
+    // Update filter tab counts
+    document.getElementById('count-all').textContent = allPlans.length;
+    document.getElementById('count-pending').textContent = counts.pending || 0;
+    document.getElementById('count-revision').textContent = counts.revision || 0;
+    document.getElementById('count-approved').textContent = counts.approved || 0;
+
+    // Revision alert
+    if (counts.revision) {
+      document.getElementById('revisionAlert').style.display = 'flex';
+      document.getElementById('revisionAlertMsg').textContent =
+        `${counts.revision} plan${counts.revision > 1 ? 's require' : ' requires'} your attention — revision requested by owner.`;
+    }
+
+    // Stats
+    const totalCost = allPlans.reduce((s, p) => s + parseFloat(p.cost || 0), 0);
+    document.getElementById('statsRow').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-icon moss">📋</div>
+        <div>
+          <div class="stat-num">${allPlans.length}</div>
+          <div class="stat-label">Total Plans</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon gold">⏳</div>
+        <div>
+          <div class="stat-num">${counts.pending || 0}</div>
+          <div class="stat-label">Awaiting Approval</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon danger">✏️</div>
+        <div>
+          <div class="stat-num">${counts.revision || 0}</div>
+          <div class="stat-label">Revision Requested</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon success">💰</div>
+        <div>
+          <div class="stat-num">$${Math.round(totalCost / 1000)}k</div>
+          <div class="stat-label">Total Plan Value</div>
+        </div>
+      </div>
+    `;
+
+    renderPlans();
+
+    // Show toast for revision plans
+    if (counts.revision) {
+      setTimeout(() => VetPlan.toast(`${counts.revision} plan(s) need your attention`, 'warning'), 800);
+    }
+  }
+
+  function setFilter(status, el) {
+    activeFilter = status;
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    renderPlans();
+  }
+
+  function filterByStatus(status) {
+    activeFilter = status;
+    document.querySelectorAll('.filter-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.status === status);
+    });
+    renderPlans();
+  }
+
+  function renderPlans() {
+    const query = document.getElementById('searchInput').value;
+    const sort = document.getElementById('sortSelect').value;
+    const plans = VetPlan.searchPlans(query, activeFilter, sort);
+    const grid = document.getElementById('patientGrid');
+    const resultCount = document.getElementById('resultCount');
+
+    resultCount.textContent = `${plans.length} result${plans.length !== 1 ? 's' : ''}`;
+
+    if (!plans.length) {
+      grid.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🔍</div>
+          <h3>No plans found</h3>
+          <p>Try adjusting your search or filter.</p>
+        </div>`;
+      return;
+    }
+
+    grid.innerHTML = plans.map((p, i) => `
+      <div class="patient-card status-${p.status} fade-up" style="animation-delay:${i * 0.04}s"
+           onclick="window.location.href='review-plan.html?id=${p.id}&mode=vet'">
+        <div class="patient-info">
+          <div class="pet-avatar ${p.petSpecies === 'Cat' ? 'clay-bg' : ''}">${VetPlan.petEmoji(p.petSpecies)}</div>
+          <div class="patient-info-text">
+            <div class="pet-name">
+              <span class="priority-dot ${VetPlan.priorityColor(p.priority)}" style="display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle;"></span>
+              ${p.petName}
+            </div>
+            <div class="pet-meta">${p.petBreed} · Owner: ${p.ownerName} · ${VetPlan.formatDateShort(p.createdDate)}</div>
+            <div class="pet-diagnosis">${p.diagnosis}</div>
+          </div>
+        </div>
+        <div class="card-right">
+          <div style="text-align:right; margin-right:0.5rem;">
+            <div style="font-family:'Fraunces',serif; font-size:1rem; color:var(--moss);">$${parseFloat(p.cost).toFixed(0)}</div>
+            <div style="font-size:0.72rem; color:var(--slate-light);">estimated</div>
+          </div>
+          ${VetPlan.statusBadge(p.status)}
+          <span class="card-arrow">›</span>
+        </div>
+      </div>
+    `).join('');
+  }
+</script>
+</body>
+</html>

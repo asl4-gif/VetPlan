@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VetPlan – My Pets</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .pet-group-header {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-family: 'Fraunces', serif;
+      font-size: 1rem;
+      font-weight: 400;
+      color: var(--charcoal);
+      margin: 1.5rem 0 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .pet-group-header:first-of-type { margin-top: 0; }
+    .cost-summary {
+      background: var(--warm-white);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .cost-summary-item { text-align: center; }
+    .cost-summary-num { font-family: 'Fraunces', serif; font-size: 1.4rem; color: var(--moss); }
+    .cost-summary-label { font-size: 0.72rem; color: var(--slate-light); text-transform: uppercase; letter-spacing: 0.05em; }
+  </style>
+</head>
+<body>
+
+<div id="toastContainer"></div>
+
+<nav>
+  <a href="owner-dashboard.html" class="nav-logo"><span>🐾</span> VetPlan</a>
+  <div class="nav-user">
+    <span class="nav-badge owner" id="navName"></span>
+    <button class="btn-logout" onclick="VetPlan.logout()">Sign out</button>
+  </div>
+</nav>
+
+<div class="page fade-up">
+
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">My Pets' <span>Plans</span></h1>
+      <p class="page-subtitle">Review and respond to treatment plans from your veterinarian.</p>
+    </div>
+  </div>
+
+  <!-- Notification for pending plans -->
+  <div id="pendingBanner" style="display:none;">
+    <div class="notification-banner">
+      ⚠️ <span id="pendingMsg"></span>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="statsRow"></div>
+
+  <!-- Cost Summary -->
+  <div class="cost-summary" id="costSummary" style="display:none;"></div>
+
+  <!-- Filter & Search -->
+  <div class="filter-bar" style="margin-bottom:1.5rem;">
+    <div class="search-wrap" style="flex:1; min-width:160px;">
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+      <input type="text" id="searchInput" placeholder="Search by pet or diagnosis…" oninput="renderPlans()" />
+    </div>
+    <div class="filter-tabs">
+      <button class="filter-tab active" data-status="all" onclick="setFilter('all', this)">All <span class="count" id="count-all">0</span></button>
+      <button class="filter-tab" data-status="pending" onclick="setFilter('pending', this)">Pending <span class="count" id="count-pending">0</span></button>
+      <button class="filter-tab" data-status="approved" onclick="setFilter('approved', this)">Approved <span class="count" id="count-approved">0</span></button>
+      <button class="filter-tab" data-status="revision" onclick="setFilter('revision', this)">Revision <span class="count" id="count-revision">0</span></button>
+    </div>
+  </div>
+
+  <!-- Plan list -->
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;">
+    <h2 style="font-family:'Fraunces',serif; font-size:1.1rem; font-weight:400; color:var(--charcoal);">Treatment Plans</h2>
+    <span id="resultCount" style="font-size:0.8rem; color:var(--slate-light);"></span>
+  </div>
+  <div class="patient-grid" id="planGrid"></div>
+
+</div>
+
+<script src="app.js"></script>
+<script>
+  const user = VetPlan.requireLogin('owner');
+  let activeFilter = 'all';
+
+  if (user) {
+    document.getElementById('navName').textContent = user.name;
+
+    const allPlans = VetPlan.getPlans().filter(p => p.ownerId === 'owner');
+    const counts = allPlans.reduce((acc, p) => { acc[p.status] = (acc[p.status] || 0) + 1; return acc; }, {});
+
+    // Update filter tab counts
+    document.getElementById('count-all').textContent = allPlans.length;
+    document.getElementById('count-pending').textContent = counts.pending || 0;
+    document.getElementById('count-approved').textContent = counts.approved || 0;
+    document.getElementById('count-revision').textContent = counts.revision || 0;
+
+    // Pending banner
+    if (counts.pending) {
+      document.getElementById('pendingBanner').style.display = 'block';
+      document.getElementById('pendingMsg').textContent =
+        `You have ${counts.pending} treatment plan${counts.pending > 1 ? 's' : ''} awaiting your review and approval.`;
+    }
+
+    // Stats
+    document.getElementById('statsRow').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-icon moss">📋</div>
+        <div>
+          <div class="stat-num">${allPlans.length}</div>
+          <div class="stat-label">Total Plans</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon gold">⏳</div>
+        <div>
+          <div class="stat-num" style="color:${counts.pending ? '#92400E' : 'var(--charcoal)'};">${counts.pending || 0}</div>
+          <div class="stat-label">Awaiting Approval</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon success">✅</div>
+        <div>
+          <div class="stat-num">${counts.approved || 0}</div>
+          <div class="stat-label">Approved</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon danger">✏️</div>
+        <div>
+          <div class="stat-num">${counts.revision || 0}</div>
+          <div class="stat-label">In Revision</div>
+        </div>
+      </div>
+    `;
+
+    // Cost summary
+    const approvedCost = allPlans.filter(p => p.status === 'approved').reduce((s, p) => s + parseFloat(p.cost || 0), 0);
+    const pendingCost = allPlans.filter(p => p.status === 'pending').reduce((s, p) => s + parseFloat(p.cost || 0), 0);
+    if (allPlans.length > 0) {
+      document.getElementById('costSummary').style.display = 'flex';
+      document.getElementById('costSummary').innerHTML = `
+        <div class="cost-summary-item">
+          <div class="cost-summary-num">$${approvedCost.toFixed(2)}</div>
+          <div class="cost-summary-label">Approved Treatment Cost</div>
+        </div>
+        <div class="cost-summary-item">
+          <div class="cost-summary-num">$${pendingCost.toFixed(2)}</div>
+          <div class="cost-summary-label">Pending Approval Cost</div>
+        </div>
+        <div class="cost-summary-item">
+          <div class="cost-summary-num">$${(approvedCost + pendingCost).toFixed(2)}</div>
+          <div class="cost-summary-label">Total Estimated Cost</div>
+        </div>
+        <div style="font-size:0.75rem; color:var(--slate-light); max-width:180px; text-align:right; line-height:1.5;">
+          Final costs may vary based on treatment response and additional services.
+        </div>
+      `;
+    }
+
+    renderPlans();
+
+    if (counts.pending) {
+      setTimeout(() => VetPlan.toast(`${counts.pending} plan(s) need your approval`, 'warning'), 800);
+    }
+  }
+
+  function setFilter(status, el) {
+    activeFilter = status;
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    renderPlans();
+  }
+
+  function renderPlans() {
+    const query = document.getElementById('searchInput').value;
+    let plans = VetPlan.searchPlans(query, activeFilter, 'newest').filter(p => p.ownerId === 'owner');
+    const grid = document.getElementById('planGrid');
+    const resultCount = document.getElementById('resultCount');
+    resultCount.textContent = `${plans.length} result${plans.length !== 1 ? 's' : ''}`;
+
+    if (!plans.length) {
+      grid.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🐾</div>
+          <h3>No plans found</h3>
+          <p>Your vet will send one when ready, or try a different filter.</p>
+        </div>`;
+      return;
+    }
+
+    // Group by pet
+    const grouped = {};
+    plans.forEach(p => {
+      if (!grouped[p.petName]) grouped[p.petName] = [];
+      grouped[p.petName].push(p);
+    });
+
+    let html = '';
+    Object.entries(grouped).forEach(([petName, petPlans]) => {
+      const species = petPlans[0].petSpecies;
+      html += `<div class="pet-group-header">${VetPlan.petEmoji(species)} ${petName} <span style="font-size:0.75rem;color:var(--slate-light);font-family:'Plus Jakarta Sans',sans-serif;">${petPlans[0].petBreed}</span></div>`;
+      html += petPlans.map((p, i) => `
+        <div class="patient-card status-${p.status} fade-up" style="animation-delay:${i * 0.05}s"
+             onclick="window.location.href='review-plan.html?id=${p.id}&mode=owner'">
+          <div class="patient-info">
+            <div class="pet-avatar ${p.petSpecies === 'Cat' ? 'clay-bg' : ''}">${VetPlan.petEmoji(p.petSpecies)}</div>
+            <div class="patient-info-text">
+              <div class="pet-name">${p.petName} — <span style="font-weight:400;color:var(--slate);">${p.diagnosis.slice(0, 60)}${p.diagnosis.length > 60 ? '…' : ''}</span></div>
+              <div class="pet-meta">Dr: ${p.vetName} · ${VetPlan.formatDateShort(p.createdDate)}</div>
+              ${p.status === 'pending' ? '<div style="margin-top:0.3rem;font-size:0.78rem;color:#92400E;font-weight:600;">⚠️ Action required — tap to review</div>' : ''}
+              ${p.status === 'revision' ? '<div style="margin-top:0.3rem;font-size:0.78rem;color:var(--clay);font-weight:600;">📝 Revision submitted — waiting for vet</div>' : ''}
+            </div>
+          </div>
+          <div class="card-right">
+            <div style="text-align:right; margin-right:0.5rem;">
+              <div style="font-family:'Fraunces',serif; font-size:1rem; color:var(--moss);">$${parseFloat(p.cost).toFixed(0)}</div>
+              <div style="font-size:0.72rem; color:var(--slate-light);">est.</div>
+            </div>
+            ${VetPlan.statusBadge(p.status)}
+            <span class="card-arrow">›</span>
+          </div>
+        </div>
+      `).join('');
+    });
+
+    grid.innerHTML = html;
+  }
+</script>
+</body>
+</html>

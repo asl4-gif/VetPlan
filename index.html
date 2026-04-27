@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VetPlan – Login</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .login-hero-stats {
+      display: flex;
+      gap: 2.5rem;
+      margin-top: 3rem;
+      padding-top: 2.5rem;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .hero-stat-num {
+      font-family: 'Fraunces', serif;
+      font-size: 1.8rem;
+      font-weight: 300;
+      color: #fff;
+    }
+    .hero-stat-label {
+      font-size: 0.72rem;
+      color: rgba(255,255,255,0.45);
+      letter-spacing: 0.05em;
+    }
+    .password-wrap { position: relative; }
+    .password-toggle {
+      position: absolute;
+      right: 0.85rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--slate-light);
+      font-size: 1rem;
+      padding: 0.25rem;
+      transition: var(--transition);
+    }
+    .password-toggle:hover { color: var(--charcoal); }
+    .login-divider {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin: 1.25rem 0;
+    }
+    .login-divider::before, .login-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+    .login-divider span { font-size: 0.75rem; color: var(--slate-light); white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+<div id="toastContainer"></div>
+
+<div class="login-wrap">
+
+  <!-- LEFT: Hero panel -->
+  <div class="login-hero">
+    <div class="hero-tag">Veterinary Care Platform</div>
+    <h1 class="hero-title">
+      Transparent care,<br><em>every step</em><br>of the way.
+    </h1>
+    <p class="hero-desc">
+      VetPlan connects veterinarians and pet owners through clear,
+      consent-driven treatment planning — so every decision is informed
+      and every voice is heard.
+    </p>
+
+    <div class="hero-features">
+      <div class="hero-feature">
+        <div class="hero-feature-dot"></div>
+        AI-powered treatment plan suggestions
+      </div>
+      <div class="hero-feature">
+        <div class="hero-feature-dot"></div>
+        Real-time plan status &amp; history tracking
+      </div>
+      <div class="hero-feature">
+        <div class="hero-feature-dot"></div>
+        Owner consent with revision workflow
+      </div>
+      <div class="hero-feature">
+        <div class="hero-feature-dot"></div>
+        Export &amp; print treatment summaries
+      </div>
+    </div>
+
+    <div class="login-hero-stats">
+      <div>
+        <div class="hero-stat-num">3</div>
+        <div class="hero-stat-label">Active Plans</div>
+      </div>
+      <div>
+        <div class="hero-stat-num">2</div>
+        <div class="hero-stat-label">Happy Pets</div>
+      </div>
+      <div>
+        <div class="hero-stat-num">100%</div>
+        <div class="hero-stat-label">Consent Rate</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Login panel -->
+  <div class="login-panel">
+    <div style="margin-bottom: 2.5rem;">
+      <div style="font-family:'Fraunces',serif; font-size:1.5rem; color:var(--moss); margin-bottom:0.15rem;">🩺 VetPlan</div>
+      <h2 class="login-heading" style="margin-bottom:0.4rem;">Welcome back</h2>
+      <p class="login-sub">Sign in to continue to your dashboard.</p>
+    </div>
+
+    <div id="errorMsg" class="error-box"></div>
+
+    <!-- Role selection -->
+    <div class="form-group">
+      <label>I am a</label>
+      <div class="role-cards">
+        <div class="role-card" id="card-vet" onclick="selectRole('vet')">
+          <div class="role-icon">🩺</div>
+          <div class="role-name">Veterinarian</div>
+          <div class="role-hint">Create &amp; manage plans</div>
+        </div>
+        <div class="role-card owner-card" id="card-owner" onclick="selectRole('owner')">
+          <div class="role-icon">🐾</div>
+          <div class="role-name">Pet Owner</div>
+          <div class="role-hint">Review &amp; approve plans</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="username">Username</label>
+      <input type="text" id="username" placeholder="Enter your username" autocomplete="username" />
+    </div>
+
+    <div class="form-group">
+      <label for="password">Password</label>
+      <div class="password-wrap">
+        <input type="password" id="password" placeholder="Enter your password" autocomplete="current-password" />
+        <button class="password-toggle" onclick="togglePassword()" id="pwToggle" title="Show/hide password">👁</button>
+      </div>
+    </div>
+
+    <div class="demo-creds">
+      <strong>Demo Credentials</strong>
+      Vet: <code>dr.rivera</code> / <code>vet123</code> &nbsp;·&nbsp;
+      Owner: <code>jordan</code> / <code>owner123</code>
+    </div>
+
+    <button class="btn btn-primary btn-primary-full" onclick="handleLogin()" id="loginBtn">
+      Sign In →
+    </button>
+
+    <div class="login-divider"><span>Quick login</span></div>
+
+    <div style="display:flex; gap:0.75rem;">
+      <button class="btn btn-secondary" style="flex:1; font-size:0.82rem;" onclick="quickLogin('vet')">
+        🩺 Login as Vet
+      </button>
+      <button class="btn btn-secondary" style="flex:1; font-size:0.82rem;" onclick="quickLogin('owner')">
+        🐾 Login as Owner
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script src="app.js"></script>
+<script>
+  let selectedRole = null;
+
+  function selectRole(role) {
+    selectedRole = role;
+    document.getElementById('card-vet').classList.toggle('active', role === 'vet');
+    document.getElementById('card-owner').classList.toggle('active', role === 'owner');
+  }
+
+  function togglePassword() {
+    const pwd = document.getElementById('password');
+    const btn = document.getElementById('pwToggle');
+    if (pwd.type === 'password') {
+      pwd.type = 'text';
+      btn.textContent = '🙈';
+    } else {
+      pwd.type = 'password';
+      btn.textContent = '👁';
+    }
+  }
+
+  function quickLogin(role) {
+    const creds = {
+      vet:   { username: 'dr.rivera', password: 'vet123' },
+      owner: { username: 'jordan',    password: 'owner123' },
+    };
+    selectRole(role);
+    document.getElementById('username').value = creds[role].username;
+    document.getElementById('password').value = creds[role].password;
+    setTimeout(handleLogin, 150);
+  }
+
+  function handleLogin() {
+    const user = document.getElementById('username').value.trim();
+    const pass = document.getElementById('password').value.trim();
+    const err  = document.getElementById('errorMsg');
+    const btn  = document.getElementById('loginBtn');
+
+    if (!selectedRole) {
+      err.textContent = 'Please select your role (Veterinarian or Pet Owner).';
+      err.style.display = 'block'; return;
+    }
+    if (!user || !pass) {
+      err.textContent = 'Please enter your username and password.';
+      err.style.display = 'block'; return;
+    }
+
+    const creds = {
+      vet:   { username: 'dr.rivera', password: 'vet123',   name: 'Dr. Rivera', role: 'vet' },
+      owner: { username: 'jordan',    password: 'owner123', name: 'Jordan Lee', role: 'owner' },
+    };
+
+    const valid = creds[selectedRole];
+    if (user !== valid.username || pass !== valid.password) {
+      err.textContent = 'Incorrect username or password. Try the demo credentials above.';
+      err.style.display = 'block'; return;
+    }
+
+    err.style.display = 'none';
+    btn.textContent = '⏳ Signing in…';
+    btn.disabled = true;
+
+    VetPlan.setUser(valid.role, valid.name);
+    setTimeout(() => {
+      window.location.href = selectedRole === 'vet' ? 'vet-dashboard.html' : 'owner-dashboard.html';
+    }, 400);
+  }
+
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+
+  const u = VetPlan.getUser();
+  if (u) window.location.href = u.role === 'vet' ? 'vet-dashboard.html' : 'owner-dashboard.html';
+</script>
+</body>
+</html>
